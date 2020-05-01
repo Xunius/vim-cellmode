@@ -194,6 +194,8 @@ endfunction
 
 function! RunTmuxPythonCell(restore_cursor)
   " This is to emulate MATLAB's cell mode
+  "
+  " Old way of cell finding --- {{{
   " Cells are delimited by ##. Note that there should be a ## at the end of the
   " file
   " The :?##?;/##/ part creates a range with the following
@@ -203,6 +205,17 @@ function! RunTmuxPythonCell(restore_cursor)
   " /##/ End the range at the next ##
   " See the doce on 'ex ranges' here :
   " http://tnerual.eriogerg.free.fr/vimqrc.html
+  " Old way of cell finding --- }}}
+  "
+  " New way of cell finding --- {{{
+  " Search backward for the cell delimiters, if found, move one line down
+  " to skip the ## line itself. If not found, assuming the beginging of the
+  " file (line 1).
+  " Search forward for the cell delimiters, if found, move one line up
+  " to skip the ## line itself. If not found, assuming the end of the
+  " file (line $).
+  " Then yank the range :cell_start,cell_end y a
+  " New way of cell finding --- }}}
   "
   " Note that cell delimiters can be configured through
   " b:cellmode_cell_delimiter, but we keep ## in the comments for simplicity
@@ -211,25 +224,42 @@ function! RunTmuxPythonCell(restore_cursor)
     let l:winview = winsaveview()
   end
 
-  " Generates the cell delimiter search pattern
-  let l:pat = ':?' . b:cellmode_cell_delimiter . '?;/' . b:cellmode_cell_delimiter . '/y a'
+  " Find cell end line number
+  let l:cell_end = search(b:cellmode_cell_delimiter, 'W')
+  if l:cell_end == 0
+	  " if not found, assuming end of file
+	  let l:cell_end = '$'
+  else
+	  " if found, move one line up
+	  let l:cell_end -= 1
+  endif
+  " Find cell start line number
+  let l:cell_start = search(b:cellmode_cell_delimiter, 'bW')
+  if l:cell_start == 0
+	  " if not found, assuming beginning of file
+	  let l:cell_start = '1'
+  else
+	  " if found, move one line down
+	  let l:cell_start += 1
+  endif
 
-  " Execute it
+  " If the entire file is found, prompt for confirmation
+  if l:cell_start=='1' && l:cell_end=='$'
+	  if input("No cell defined. Execute entire script ? [y]|n ", 'y') != "y"
+	    return
+	  endif
+  endif
+  " yank range
+  let l:pat = ':' . l:cell_start . ',' . l:cell_end . 'y a'
   silent exe l:pat
-
-  "silent :?\=b:cellmode_cell_delimiter?;/\=b:cellmode_cell_delimiter/y a
 
   " Now, we want to position ourselves inside the next block to allow block
   " execution chaining (of course if restore_cursor is true, this is a no-op
   " Move to the last character of the previously yanked text
   execute "normal! ']"
-  " Move one line down
-  execute "normal! j"
+  " Move 2 line down
+  execute "normal! 2j"
 
-  " The above will have the leading and ending ## in the register, but we
-  " have to remove them (especially leading one) to get a correct indentation
-  " estimate. So just select the correct subrange of lines [1:-2]
-  let @a=join(split(@a, "\n")[1:-2], "\n")
   call RunTmuxPythonReg()
   if a:restore_cursor
     call winrestview(l:winview)
@@ -250,10 +280,20 @@ function! RunTmuxPythonAllCellsAbove()
 
   " Creates a range from the first line to the closest ## above the current
   " line (?##? searches backward for ##)
-  let l:pat = ':1,?' . b:cellmode_cell_delimiter . '?y a'
-  silent exe l:pat
+  let l:end_line = search(b:cellmode_cell_delimiter, 'bW')
+	if l:end_line > 1
+		" if found, move 1 line up from ##
+		let l:end_line -= 1
+	else
+	  " if not found, quit
+		redraw
+		echom "No cells found above current line"
+		return
+	endif
 
-  let @a=join(split(@a, "\n")[:-2], "\n")
+	let l:pat = ':1,' . l:end_line . 'y a'
+	silent exe l:pat
+
   call RunTmuxPythonReg()
   call setpos(".", l:cursor_pos)
 endfunction
