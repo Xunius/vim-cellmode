@@ -9,6 +9,44 @@
 "  let g:cellmode_screen_window='0'
 "  let g:cellmode_use_tmux=1
 
+python3 << EOF
+
+import vim
+
+# The set of marks that will be used as cell delimiters.
+DEFAULT_VALID_MARKS = 'abcdefghijklmnopqrstuvqxyzABCDEFGHIJKLMNOPQRSTUVWXYZ'
+
+def get_cell_by_marks():
+    # Find a cell by vim marks
+	# The beginning and end of file are assumed to be marked
+
+    cur_row = int(vim.current.window.cursor[0])
+    # get a list of all of the mark locations
+    locations = []
+    for letter in DEFAULT_VALID_MARKS:
+        location_of_mark = vim.current.buffer.mark(letter)
+        if location_of_mark is not None:
+            locations.append(location_of_mark[0])
+    # If no marks found, return 0s
+    if len(locations) == 0:
+        return 0, 0, 0
+	# make dummy "marks" at the beginning of the file
+    locations = sorted(set([1] + locations))
+
+	# find which cell we are in. The line that the cursor is on should always be included in the cell.
+    cell_start = [mark for mark in locations if mark <= cur_row][-1]
+    next_cell_start = [mark for mark in locations if mark > cur_row]
+
+    # if there are no marks after the current row, then select to the end of the buffer
+    cell_end = next_cell_start[0]-1 if next_cell_start else len(vim.current.buffer)
+
+    # if there are marks after this one, make them the start of the next cell, otherwise, stay where you are
+    next_cell_start = next_cell_start[0] if next_cell_start else cur_row
+
+    return cell_start, cell_end, next_cell_start
+
+EOF
+
 function! PythonUnindent(code)
   " The code is unindented so the first selected line has 0 indentation
   " So you can select a statement from inside a function and it will run
@@ -192,6 +230,47 @@ function! RunTmuxPythonReg()
   end
 endfunction
 
+function! RunTmuxPythonCellByMarks(restore_cursor)
+  " Run a cell of python code defined by buffer marks
+
+  call DefaultVars()
+  if a:restore_cursor
+    let l:winview = winsaveview()
+  end
+
+  " find the cell by marks
+  let l:cell_lines = py3eval('get_cell_by_marks()')
+  let l:cell_start = l:cell_lines[0]
+  let l:cell_end = l:cell_lines[1]
+  " if both start and end are 0, no mark in buffer
+  if l:cell_start == 0 && l:cell_end == 0
+	  if input("No marks defined. Execute entire script ? y|[n] ", 'n') != "y"
+	    return
+      else
+	    let l:cell_start = '1'
+		let l:cell_end = '$'
+	  endif
+  endif
+
+  " yank range
+  let l:pat = ':' . l:cell_start . ',' . l:cell_end . 'y a'
+  silent exe l:pat
+
+  " Now, we want to position ourselves inside the next block to allow block
+  " execution chaining (of course if restore_cursor is true, this is a no-op
+  " Move to the last character of the previously yanked text
+  execute "normal! ']"
+  " Move 2 line down
+  execute "normal! 2j"
+
+  call RunTmuxPythonReg()
+  if a:restore_cursor
+    call winrestview(l:winview)
+  end
+
+
+endfunction
+
 function! RunTmuxPythonCell(restore_cursor)
   " This is to emulate MATLAB's cell mode
   "
@@ -328,4 +407,5 @@ if g:cellmode_default_mappings
     vmap <silent> <C-c> :call RunTmuxPythonChunk()<CR>
     noremap <silent> <C-b> :call RunTmuxPythonCell(0)<CR>
     noremap <silent> <C-g> :call RunTmuxPythonCell(1)<CR>
+    noremap <silent> <C-c><C-j> :call RunTmuxPythonCellByMarks(1)<CR>
 endif
