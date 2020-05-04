@@ -3,48 +3,54 @@ Vim-cellmode
 This a vim plugin that enables MATLAB-style cell mode execution for python
 scripts in vim, assuming an ipython interpreter running in screen (or tmux).
 
-Demo
-----
+## Demo
 [![Youtube demo video](http://img.youtube.com/vi/ju50L7Fcn7w/0.jpg)](http://www.youtube.com/watch?v=ju50L7Fcn7w)
 
-Usage
------
+## Usage
 
-Blocks are delimited by `##`, `#%%` or `# %%` (customizable through
+Blocks are defined by text markers or vim marks.
+
+For **marker-based blocks**, blocks are delimited by `##`, `#%%` or `# %%` (customizable through
 `cellmode_cell_delimiter`).
 For example, say you have the following python script :
 
     ##
     import numpy as np
-    print 'Hello'                  # (1)
+    print('Hello')                  # (1)
     np.zeros(3)
     ##
     if True:
-      print 'Yay !'                # (2)
-      print 'Foo'                  # (3)
+      print('Yay !')                # (2)
+      print('Foo')                  # (3)
     ##
 
-If you put your cursor on the line marked with (1) and hit Ctrl-G, the 3 lines
-in the first cell will be sent to tmux. If you hit Ctrl-B, the same will happen
-but the cursor will move to the line after the ## (so you can chain Ctrl-B).
+If you put your cursor on the line marked with (1) and hit Ctrl-g, the 3 lines
+in the first cell will be sent to tmux. If you hit Ctrl-b, the same will happen
+but the cursor will move to the line after the ## (so you can chain Ctrl-b).
+The plugin automatically deindent selected lines so that the first line has no
+indentation.
 
-You can also select line(s) and hit Ctrl-C to send them to tmux. The plugin
-automatically deindent selected lines so that the first line has no
-indentation. So for example if you select the line marked (2) and (3), the
-print statements will be de-indented and sent to tmux and ipython will
-correctly run them.
+**NOTE** that markers at the very 1st and last lines are optional.
 
-Requirements
-------------
-On Linux, you need xclip if you want to use screen.
+For **mark-based blocks**, alphabetic marks defined in a vim buffer using, for
+istance `ma` and `mb`, will define a block between the lines with mark `a`
+and `b`. (checkout [ShowMarks](https://github.com/vim-scripts/ShowMarks) for
+a plugin that visualize the buffer marks.)
 
-Keys mapping
------------
+You can also visually select line(s) and hit Ctrl-c to send them to tmux.
+
+## Requirements
+
+On Linux, you need `xclip` if you want to use screen.
+
+## Keys mapping
+
 By default, the following mappings are enabled :
 
-* *C-c* sends the currently selected lines to tmux
 * *C-g* sends the current cell to tmux
 * *C-b* sends the current cell to tmux, moving to the next one
+* *C-c* sends the currently selected lines to tmux
+* *C-c C-j* sends the current mark-defined cell to tmux, moving to the next one
 
 You can disable default mappings :
 
@@ -56,8 +62,8 @@ which isn't bound by default, but you can easily bind it with :
     noremap <silent> <C-a> :call RunTmuxPythonAllCellsAbove()<CR>
 
 
-Options
--------
+## Options
+
 You have to configure the target tmux/screen session/window/pane. By default, the
 following is used :
 
@@ -85,8 +91,17 @@ in it. So for example
 
 will match `##`, `#%%` and `# %%` as cell delimiters. This is the default configuration.
 
-Difference with vim-ipython
----------------------------
+
+## Use with vanilla python instead of ipython (experimental)
+
+To use with a vanilla python session instead of ipython, set in `.vimrc`
+
+```
+let g:cellmode_python_session='python'
+```
+
+## Difference with vim-ipython
+
 Note that if you want more advanced integration with IPython (using the new
 multi-client architecture), there is the vim-ipython project :
 https://github.com/ivanov/vim-ipython/
@@ -96,6 +111,6 @@ as you would do it manually from vim to ipython. This allow to see the result
 of the execution directly in the ipython split whereas vim-ipython uses a
 separate vim buffer to show the results.
 
-License
--------
+## License
+
 MIT (see LICENSE)

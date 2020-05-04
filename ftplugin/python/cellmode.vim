@@ -9,6 +9,8 @@
 "  let g:cellmode_screen_window='0'
 "  let g:cellmode_use_tmux=1
 
+"  let g:cellmode_python_session='ipython'
+
 python3 << EOF
 
 import vim
@@ -47,11 +49,19 @@ def get_cell_by_marks():
 
 EOF
 
+function! PythonRemoveBlankLine(lines)
+  " Remove empty lines from list of strings
+  let l:lines2 = filter(a:lines, 'len(v:val)')
+  call filter(l:lines2, 'match(v:val, ' . "'\v^\s*$')")
+  return l:lines2
+endfunction
+
 function! PythonUnindent(code)
   " The code is unindented so the first selected line has 0 indentation
   " So you can select a statement from inside a function and it will run
   " without python complaining about indentation.
   let l:lines = split(a:code, "\n")
+  let l:lines = PythonRemoveBlankLine(l:lines)
   if len(l:lines) == 0 " Special case for empty string
     return a:code
   end
@@ -185,16 +195,21 @@ function! CopyToTmux(code)
              \ . b:cellmode_tmux_windowname . '.'
              \ . b:cellmode_tmux_panenumber
 
-  " Ipython has some trouble if we paste large buffer if it has been started
-  " in a small console. We use %load to work around that
-  "call CallSystem('tmux load-buffer ' . l:cellmode_fname)
-  "call CallSystem('tmux paste-buffer -t ' . target)
-  call CallSystem("tmux set-buffer \"%load -y " . l:cellmode_fname . "\n\"")
-  call CallSystem('tmux paste-buffer -t "' . target . '"')
-  " In ipython5, the cursor starts at the top of the lines, so we have to move
-  " to the bottom
-  let downlist = repeat('Down ', len(l:lines) + 1)
-  call CallSystem('tmux send-keys -t "' . target . '" ' . downlist)
+  let l:py_session = GetVar('cellmode_python_session', 'ipython')
+  if l:py_session == 'python'
+	  call CallSystem('tmux load-buffer ' . l:cellmode_fname)
+	  call CallSystem('tmux paste-buffer -t ' . target)
+  else
+	  " Ipython has some trouble if we paste large buffer if it has been started
+	  " in a small console. We use %load to work around that
+	  call CallSystem("tmux set-buffer \"%load -y " . l:cellmode_fname . "\n\"")
+	  call CallSystem('tmux paste-buffer -t "' . target . '"')
+	  " In ipython5, the cursor starts at the top of the lines, so we have to move
+	  " to the bottom
+	  let downlist = repeat('Down ', len(l:lines) + 1)
+	  call CallSystem('tmux send-keys -t "' . target . '" ' . downlist)
+  endif
+
   " Simulate double enter to run loaded code
   call CallSystem('tmux send-keys -t "' . target . '" Enter Enter')
 endfunction
