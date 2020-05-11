@@ -4,7 +4,6 @@
 " You can define the following globals or buffer config variables
 "  let g:cellmode_tmux_sessionname='$ipython'
 "  let g:cellmode_tmux_windowname='ipython'
-"  let g:cellmode_tmux_panenumber='0'
 "  let g:cellmode_screen_sessionname='ipython'
 "  let g:cellmode_screen_window='0'
 "  let g:cellmode_use_tmux=1
@@ -147,13 +146,13 @@ function! DefaultVars()
   end
 
   if !exists("b:cellmode_tmux_sessionname") ||
-   \ !exists("b:cellmode_tmux_windowname") ||
-   \ !exists("b:cellmode_tmux_panenumber")
+   \ !exists("b:cellmode_tmux_windowname")
+   "\ !exists("b:cellmode_tmux_panenumber")
     " Empty target session and window by default => try to automatically pick
     " tmux session
     let b:cellmode_tmux_sessionname = GetVar('cellmode_tmux_sessionname', '')
     let b:cellmode_tmux_windowname = GetVar('cellmode_tmux_windowname', '')
-    let b:cellmode_tmux_panenumber = GetVar('cellmode_tmux_panenumber', '0')
+    "let b:cellmode_tmux_panenumber = GetVar('cellmode_tmux_panenumber', '2')
   end
 
   if !exists("g:cellmode_screen_sessionname") ||
@@ -170,6 +169,45 @@ function! CallSystem(cmd)
     echom 'Vim-cellmode, error running ' . a:cmd . ' : ' . l:out
   end
 endfunction
+
+function! PickTmuxPane()
+	" choose the current tmux pane to send code to"
+
+	" get a list of pane numbers
+	let l:panes = systemlist("tmux list-panes | awk -F: '{print$1}'")
+	" If no panes in current window, return -1, which will trigger an abort later
+	if len(l:panes) == 0
+		return '-1'
+	endif
+
+	" find the current pane, need to strip trailing whitespaces
+	let l:current_pane = system("tmux display -p '#{pane_index}' | tr '\n' ' '")
+	let l:current_pane = substitute(l:current_pane, '^\s*\(.\{-}\)\s*$', '\1', '')
+
+	" if only two panes, choose the one other than the vim pane
+	if len(l:panes) == 2
+		for i in l:panes
+			if i != l:current_pane
+				return i
+			endif
+		endfor
+	" if more than 2, prompt for user choice
+	else
+		" let tmux display pane numbers
+		call system("tmux display-panes")
+	    let l:sel_pane = input("Select pane. [1-9] ", '2')
+		if index(l:panes, l:sel_pane) == -1
+			echom("Invalid pane number")
+			return '-1'
+		elseif l:sel_pane == l:current_pane
+			echom("Selected current pane")
+			return '-1'
+		else
+			return l:sel_pane
+		endif
+	endif
+endfunction
+
 
 function! CopyToTmux(code)
   " Copy the given code to tmux. We use a temp file for that
@@ -191,9 +229,15 @@ function! CopyToTmux(code)
   else
     let l:sprefix = '$'
   end
+
+  let target_pane = PickTmuxPane()
+  if target_pane == '-1'
+	  return
+  endif
   let target = l:sprefix . b:cellmode_tmux_sessionname . ':'
              \ . b:cellmode_tmux_windowname . '.'
-             \ . b:cellmode_tmux_panenumber
+             \ . target_pane
+             "\ . b:cellmode_tmux_panenumber
 
   let l:py_session = GetVar('cellmode_python_session', 'ipython')
   if l:py_session == 'python'
